@@ -1,0 +1,6 @@
+ADMIN_USER_PASS: "ADMIN_PASSWORD"
+PUBIP: "PUBLIC_IP"
+SETUP_JENKINS_CLI: "PROJECT_DIR/ansible/setup-jenkins-cli.sh"
+CONFIG_XML: "PROJECT_DIR/ansible/config.xml"
+CREDENTIALS_XML: "PROJECT_DIR/ansible/cred.xml"
+NGINX_CONF: "PROJECT_DIR/ansible/nginx_conf"

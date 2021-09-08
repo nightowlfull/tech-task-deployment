@@ -1,0 +1,180 @@
+---
+- hosts: dashboard
+  become: true
+  vars_files:
+   - variables.yml
+  tasks:
+  - name: Upgrade packages
+    apt:
+     upgrade: yes
+     update_cache: yes
+     force_apt_get: true
+
+  - name: Copy script to server
+    copy:
+     src: "{{ SETUP_JENKINS_CLI }}"
+     dest: /home/ubuntu/setup-jenkins-cli.sh
+
+  - name: Copy Project XML to server
+    copy:
+     src: "{{ CONFIG_XML }}"
+     dest: /home/ubuntu/config.xml
+
+  - name: Copy Credentials XML to server
+    copy:
+     src: "{{ CREDENTIALS_XML }}"
+     dest: /home/ubuntu/cred.xml
+
+  - name: Install Docker.io
+    apt:
+     name: docker.io
+     state: latest
+
+  - name: start service
+    service:
+     name: docker
+     state: reloaded
+     enabled: yes
+
+  - name: adding existing user ubuntu to group docker
+    user:
+     name: ubuntu
+     groups: docker
+     append: yes
+
+  - name: Remove useless packages from the cache
+    apt:
+     autoclean: yes
+
+  - name: Install Docker Compose (if configured).
+    get_url:
+     url: https://github.com/docker/compose/releases/download/1.28.5/docker-compose-Linux-x86_64
+     dest: /usr/bin/docker-compose
+     mode: 0755
+
+  - name: install jre8
+    apt:
+     name: openjdk-8-jre
+     state: present
+     update_cache: yes
+    become: true
+
+  - name: add jenkins repo key
+    apt_key:
+     url: https://pkg.jenkins.io/debian/jenkins.io.key
+     state: present
+    become: true
+
+  - name: add jenkins repo list file into sources.list.d
+    apt_repository:
+     repo: deb http://pkg.jenkins.io/debian-stable binary/
+     state: present
+    become: true
+
+  - name: Enable GPG check
+    shell: wget -qO - https://pkg.jenkins.io/debian-stable/jenkins.io.key | apt-key add -
+    become: yes
+
+  - name: install jenkins
+    apt:
+     name: jenkins
+     state: present
+     update_cache: yes
+    become: true
+
+  - name: install git
+    apt:
+     name: git
+     state: present
+    become: true
+
+  - name: adding existing user jenkins to group docker
+    user:
+     name: jenkins
+     groups: docker
+     append: yes
+
+  - name: read admin pwd
+    shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+    register: ADMINPWD
+    become: yes
+
+  - name: Ensure groovy csrf error is bypassed
+    become: yes
+    lineinfile:
+     path: /etc/default/jenkins
+     line: 'JAVA_ARGS="$JAVA_ARGS -Dhudson.security.csrf.DefaultCrumbIssuer.EXCLUDE_SESSION_ID=true"'
+     create: yes
+
+  - name: start jenkins service
+    service:
+     name: jenkins
+     state: restarted
+     enabled: yes
+    become: true
+
+  - name: sleep 12 seconds
+    shell: sleep 12
+
+  - name: unlock and add admin user
+    jenkins_script:
+     script: |
+      import jenkins.model.*
+      import hudson.security.*
+      def instance = Jenkins.getInstance()
+      def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+      hudsonRealm.createAccount('admin', '${USER_PWD}')
+      instance.setSecurityRealm(hudsonRealm)
+      def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+      strategy.setAllowAnonymousRead(false)
+      instance.setAuthorizationStrategy(strategy)
+      instance.save()
+     args:
+      USER_PWD: "{{ ADMIN_USER_PASS }}"
+     user: admin
+     password: "{{ ADMINPWD.stdout }}"
+
+  - name: complete setup wizard
+    jenkins_script:
+     script: |
+      import static jenkins.model.Jenkins.instance as jenkins
+      import jenkins.install.InstallState
+      if (!jenkins.installState.isSetupComplete()) {
+        InstallState.INITIAL_SETUP_COMPLETED.initializeState()
+      }
+     user: admin
+     password: "{{ ADMIN_USER_PASS }}"
+
+  - name: Jenkins restart
+    service:
+     name: jenkins
+     state: restarted
+
+  - name: Run the Script
+    command: sudo sh /home/ubuntu/setup-jenkins-cli.sh
+    become: true
+
+## Nginx configuration   
+
+  - name: Install Nginx
+    apt:
+     name: nginx
+     state: latest
+
+  - name: Copy Nginx to server
+    copy:
+     src: "{{ NGINX_CONF }}"
+     dest: /etc/nginx/conf.d/task.conf
+
+  - name: Replacing nginx config
+    replace:
+     path: /etc/nginx/conf.d/task.conf
+     regexp: "name_server"
+     replace: "{{ PUBIP }}"
+
+  - name: start service
+    service:
+     name: nginx
+     state: restarted
+     enabled: yes
+

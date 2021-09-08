@@ -1,0 +1,8 @@
+<com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl >
+  <scope>GLOBAL OR SYSTEM</scope>
+  <id>Github_tanuj</id> 
+  <username>GIT_USERNAME</username>
+  <password>GIT_PASSWORD</password>
+  <description>Github_tanuj</description>
+</com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl> 
+
